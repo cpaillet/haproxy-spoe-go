@@ -3,7 +3,6 @@ package spoe
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -80,35 +79,14 @@ func (c *conn) run(a *Agent) error {
 		return nil
 	}
 
-	a.acksLock.Lock()
-	if _, ok := a.acks[acksKey]; !ok {
-		a.acks[acksKey] = make(chan frame)
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		a.acksWG[acksKey] = wg
 
-		go func() {
-			// wait until there is no more connection for this engine-id
-			// before deleting it
-			wg.Wait()
 
-			a.acksLock.Lock()
-			delete(a.acksWG, acksKey)
-			delete(a.acks, acksKey)
-			a.acksLock.Unlock()
-		}()
-	} else {
-		a.acksWG[acksKey].Add(1)
-	}
-	// signal that this connection is done using the engine
-	defer a.acksWG[acksKey].Done()
-
-	acks := a.acks[acksKey]
-	a.acksLock.Unlock()
+	acks := make(chan frame)
 
 	// run reply loop
 	go func() {
 		for {
+			//log.Debugf("conn115: in reply loop %s", acksKey)
 			select {
 			case <-done:
 				return
@@ -123,6 +101,7 @@ func (c *conn) run(a *Agent) error {
 	}()
 
 	for {
+		//log.Debugf("conn130: in for loop %s", acksKey)
 		ok, err := cod.decodeFrame(&myframe)
 		if err != nil {
 			return err
